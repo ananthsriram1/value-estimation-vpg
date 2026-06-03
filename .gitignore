@@ -1,0 +1,27 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+dist/
+build/
+
+# Virtual environment
+.venv/
+venv/
+
+# Training logs & checkpoints
+log/
+**/log/
+examples/mujoco/log/
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/
+
+# Local-only notes (do not commit to upstream-style PRs)
+paper-context/
+tianshou-context/
+
+*.pdf

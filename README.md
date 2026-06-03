@@ -4,7 +4,7 @@ This repository contains the code and implementation details in the paper **Impr
 
 The empirical results presented in the paper were obtained using `examples/mujoco/run_experiments.sh`, which is adapted from **[Tianshou](https://github.com/thu-ml/tianshou)**. However, we understand that the Tianshou library is somewhat complex. For easier reproduction, we also provide a simplified, single-file implementation `VPG_single_file.py` adapted from **[CleanRL](https://github.com/vwxyzjn/cleanrl)** which removes some non-essential components from the original implementation.
 
-For prerequisites, please check with `requirements.txt` in **[CleanRL](https://github.com/vwxyzjn/cleanrl)**. Note that since we only conduct experiments on robotics environments in **[Gymnasium](https://gymnasium.farama.org/)**, not all dependencies required by CleanRL need to be installed to run our experiments.
+For prerequisites, see `requirements.txt` and [SETUP.md](./SETUP.md) (Apple Silicon notes). The CleanRL single-file script may need additional packages from **[CleanRL](https://github.com/vwxyzjn/cleanrl)**; MuJoCo experiments here only need Gymnasium.
 
 An example use of `VPG_single_file.py`:
 ```

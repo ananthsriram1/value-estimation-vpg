@@ -61,6 +61,7 @@ class A2CRepeatPolicy(PGPolicy):
         max_grad_norm: Optional[float] = None,
         gae_lambda: float = 0.95,
         max_batchsize: int = 256,
+        repeat_critic: int = 1,
         **kwargs: Any
     ) -> None:
         super().__init__(actor, optim, dist_fn, **kwargs)
@@ -72,7 +73,7 @@ class A2CRepeatPolicy(PGPolicy):
         self._grad_norm = max_grad_norm
         self._batch = max_batchsize
         self._actor_critic = ActorCritic(self.actor, self.critic)
-        self._repeat_critic = kwargs.get('repeat_critic', 1)
+        self._repeat_critic = repeat_critic
 
     def process_fn(
         self, batch: Batch, buffer: ReplayBuffer, indices: np.ndarray

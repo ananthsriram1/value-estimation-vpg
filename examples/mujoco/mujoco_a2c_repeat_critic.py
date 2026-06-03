@@ -15,6 +15,7 @@ from torch.utils.tensorboard import SummaryWriter
 
 from tianshou.data import Collector, ReplayBuffer, VectorReplayBuffer
 from tianshou.policy.modelfree.a2c_repeat_critic import A2CRepeatPolicy
+from tianshou.trainer import onpolicy_trainer
 from tianshou.utils import TensorboardLogger, WandbLogger
 from tianshou.utils.net.common import Net
 from tianshou.utils.net.continuous import ActorProb, Critic
@@ -38,6 +39,7 @@ def get_args():
     parser.add_argument("--batch-size", type=int, default=99999)
     parser.add_argument("--training-num", type=int, default=16)
     parser.add_argument("--test-num", type=int, default=10)
+    parser.add_argument("--rew-norm", type=int, default=False)
     parser.add_argument("--vf-coef", type=float, default=0.25)
     parser.add_argument("--ent-coef", type=float, default=0.0)
     parser.add_argument("--gae-lambda", type=float, default=0.95)

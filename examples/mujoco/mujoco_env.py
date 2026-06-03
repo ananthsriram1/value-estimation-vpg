@@ -10,6 +10,13 @@ except ImportError:
     envpool = None
 
 
+def _seed_env(env, seed):
+    """Gymnasium uses reset(seed=); legacy Gym used env.seed()."""
+    if hasattr(env, "seed"):
+        return env.seed(seed)
+    env.reset(seed=seed)
+
+
 def make_mujoco_env(task, seed, training_num, test_num, obs_norm):
     """Wrapper function for Mujoco env.
 
@@ -32,7 +39,7 @@ def make_mujoco_env(task, seed, training_num, test_num, obs_norm):
             [lambda: gym.make(task) for _ in range(training_num)]
         )
         test_envs = ShmemVectorEnv([lambda: gym.make(task) for _ in range(test_num)])
-        env.seed(seed)
+        _seed_env(env, seed)
         train_envs.seed(seed)
         test_envs.seed(seed)
     if obs_norm:
