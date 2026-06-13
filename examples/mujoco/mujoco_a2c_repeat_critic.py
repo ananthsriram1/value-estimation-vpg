@@ -4,10 +4,13 @@ import argparse
 import datetime
 import os
 import pprint
+import time
 
 import numpy as np
 import torch
 from mujoco_env import make_mujoco_env
+from mujoco_metrics import make_eta_test_fn
+from run_metrics import chain_test_fn, make_epoch_profile_hooks, write_run_summary
 from torch import nn
 from torch.distributions import Independent, Normal
 from torch.optim.lr_scheduler import LambdaLR
@@ -26,7 +29,17 @@ def get_args():
     parser.add_argument("--task", type=str, default="Hopper-v3")
     parser.add_argument("--repeat-critic", type=int, default=10)
     parser.add_argument("--save-interval", type=int, default=20)
-    parser.add_argument("--algo_name", type=str, default="vpg-repeat-critic")
+    parser.add_argument("--algo_name", type=str, default=None)
+    parser.add_argument("--ev-gate", action="store_true")
+    parser.add_argument("--ev-tau", type=float, default=0.0)
+    parser.add_argument("--ev-delta", type=float, default=0.0)
+    parser.add_argument("--ev-holdout-frac", type=float, default=0.2)
+    parser.add_argument(
+        "--ev-gate-mode",
+        type=str,
+        default="threshold",
+        choices=["threshold", "delta", "combo"],
+    )
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--buffer-size", type=int, default=4096)
     parser.add_argument("--hidden-sizes", type=int, nargs="*", default=[64,64])  #[64, 64]
@@ -66,10 +79,23 @@ def get_args():
         action="store_true",
         help="watch the play of pre-trained policy only",
     )
+    parser.add_argument(
+        "--log-eta",
+        action="store_true",
+        help="log Wang value error eta(s0) during periodic test phases",
+    )
+    parser.add_argument(
+        "--eta-episodes",
+        type=int,
+        default=10,
+        help="episodes per eta(s0) estimate when --log-eta is set",
+    )
     return parser.parse_args()
 
 
 def test_a2c(args=get_args()):
+    if args.algo_name is None:
+        args.algo_name = "vpg-ev" if args.ev_gate else "vpg-repeat-critic"
     env, train_envs, test_envs = make_mujoco_env(
         args.task, args.seed, args.training_num, args.test_num, obs_norm=True
     )
@@ -141,6 +167,11 @@ def test_a2c(args=get_args()):
         optim,
         dist,
         repeat_critic=args.repeat_critic,
+        ev_gate=args.ev_gate,
+        ev_tau=args.ev_tau,
+        ev_delta=args.ev_delta,
+        ev_holdout_frac=args.ev_holdout_frac,
+        ev_gate_mode=args.ev_gate_mode,
         discount_factor=args.gamma,
         gae_lambda=args.gae_lambda,
         max_grad_norm=args.max_grad_norm,
@@ -151,6 +182,7 @@ def test_a2c(args=get_args()):
         action_bound_method=args.bound_action_method,
         lr_scheduler=lr_scheduler,
         action_space=env.action_space,
+        deterministic_eval=True,
     )
 
     # load a previous policy
@@ -209,8 +241,23 @@ def test_a2c(args=get_args()):
         torch.save(save_dict, ckpt_path)
         return ckpt_path
 
+    train_fn, epoch_profile_fn = make_epoch_profile_hooks(writer, args.step_per_epoch)
+    eta_fn = None
+    if args.log_eta:
+        eta_fn = make_eta_test_fn(
+            policy,
+            args.task,
+            train_envs,
+            args.gamma,
+            writer,
+            n_episodes=args.eta_episodes,
+            seed=args.seed,
+            device=args.device,
+        )
+    test_fn = chain_test_fn(epoch_profile_fn, eta_fn)
+
     if not args.watch:
-        # trainer
+        t_run0 = time.perf_counter()
         result = onpolicy_trainer(
             policy,
             train_collector,
@@ -224,16 +271,36 @@ def test_a2c(args=get_args()):
             save_best_fn=save_best_fn,
             save_checkpoint_fn=save_checkpoint_fn,
             logger=logger,
+            train_fn=train_fn,
+            test_fn=test_fn,
             test_in_train=False,
         )
+        wall_s = time.perf_counter() - t_run0
         pprint.pprint(result)
 
     # Let's watch its performance!
     policy.eval()
     test_envs.seed(args.seed)
     test_collector.reset()
-    result = test_collector.collect(n_episode=args.test_num, render=args.render)
-    print(f'Final reward: {result["rews"].mean()}, length: {result["lens"].mean()}')
+    final = test_collector.collect(n_episode=args.test_num, render=args.render)
+    print(f'Final reward: {final["rews"].mean()}, length: {final["lens"].mean()}')
+
+    if not args.watch:
+        write_run_summary(
+            log_path,
+            {
+                "task": args.task,
+                "algo_name": args.algo_name,
+                "seed": args.seed,
+                "repeat_critic": args.repeat_critic,
+                "ev_gate": args.ev_gate,
+                "ev_tau": args.ev_tau,
+                "total_env_steps": args.step_per_epoch * args.epoch,
+            },
+            result,
+            {"reward": float(final["rews"].mean()), "length": float(final["lens"].mean())},
+            wall_s,
+        )
 
 
 if __name__ == "__main__":
